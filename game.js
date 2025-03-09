@@ -1,16 +1,11 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-let player = {
-    x: 400,
-    y: 300,
-    size: 20,
-    speed: 5
-};
-
+let player = { x: 400, y: 300, size: 20, speed: 5 };
 let enemies = [];
+let bullets = [];
 let spawnTimer = 0;
-
+let attackCooldown = 0;
 let keys = {};
 
 document.addEventListener('keydown', (e) => { keys[e.key] = true; });
@@ -24,6 +19,26 @@ function spawnEnemy() {
     else if (edge === 2) { x = Math.random() * canvas.width; y = 0; }
     else { x = Math.random() * canvas.width; y = canvas.height; }
     enemies.push({ x, y, size: 15, speed: 2.5 });
+}
+
+function shootBullet() {
+    if (keys[' '] && attackCooldown <= 0 && enemies.length > 0) {
+        const closestEnemy = enemies.reduce((closest, enemy) => {
+            const distToClosest = Math.sqrt((player.x - closest.x) ** 2 + (player.y - closest.y) ** 2);
+            const distToEnemy = Math.sqrt((player.x - enemy.x) ** 2 + (player.y - enemy.y) ** 2);
+            return distToEnemy < distToClosest ? enemy : closest;
+        });
+        bullets.push({
+            x: player.x,
+            y: player.y,
+            targetX: closestEnemy.x,
+            targetY: closestEnemy.y,
+            speed: 10,
+            size: 5
+        });
+        attackCooldown = 60;
+    }
+    if (attackCooldown > 0) attackCooldown--;
 }
 
 function movePlayer() {
@@ -43,6 +58,29 @@ function moveEnemies() {
     });
 }
 
+function moveBullets() {
+    bullets.forEach((bullet, bulletIndex) => {
+        const dx = bullet.targetX - bullet.x;
+        const dy = bullet.targetY - bullet.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > bullet.speed) {
+            bullet.x += (dx / dist) * bullet.speed;
+            bullet.y += (dy / dist) * bullet.speed;
+        } else {
+            bullets.splice(bulletIndex, 1);  // 목표 도달 시 제거
+        }
+
+        // 총알과 적 충돌 체크
+        enemies.forEach((enemy, enemyIndex) => {
+            const distToEnemy = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+            if (distToEnemy < bullet.size + enemy.size) {
+                enemies.splice(enemyIndex, 1);  // 적 제거
+                bullets.splice(bulletIndex, 1);  // 총알 제거
+            }
+        });
+    });
+}
+
 function drawPlayer() {
     ctx.fillStyle = 'blue';
     ctx.beginPath();
@@ -59,17 +97,29 @@ function drawEnemies() {
     });
 }
 
+function drawBullets() {
+    ctx.fillStyle = 'white';
+    bullets.forEach(bullet => {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
 function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     spawnTimer++;
-    if (spawnTimer >= 48) {  // 약 0.8초마다 생성
+    if (spawnTimer >= 48) {
         spawnEnemy();
         spawnTimer = 0;
     }
     movePlayer();
     moveEnemies();
+    shootBullet();
+    moveBullets();
     drawPlayer();
     drawEnemies();
+    drawBullets();
     requestAnimationFrame(update);
 }
 
