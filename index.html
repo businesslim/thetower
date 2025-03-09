@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Tower</title>
     <style>
-        canvas { border: 1px solid white; background: black; }
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: black; }
+        body { margin: 0; padding: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { border: 1px solid white; background: black; max-width: 100%; max-height: 100%; touch-action: none; }
         #modal { 
             position: absolute; 
             background: #323232; 
@@ -15,6 +16,7 @@
             display: none; 
             text-align: center; 
             font-family: Arial, sans-serif;
+            z-index: 10;
         }
         #modal button { 
             margin: 5px; 
@@ -25,11 +27,32 @@
             cursor: pointer; 
         }
         #modal button:hover { background: #b4b4b4; }
+        #joystick { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 20px; 
+            width: 100px; 
+            height: 100px; 
+            background: rgba(255, 255, 255, 0.2); 
+            border-radius: 50%; 
+            display: none; 
+            touch-action: none; 
+        }
+        #joystick-knob { 
+            position: absolute; 
+            width: 40px; 
+            height: 40px; 
+            background: white; 
+            border-radius: 50%; 
+            top: 30px; 
+            left: 30px; 
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <div id="modal"></div>
+    <div id="joystick"><div id="joystick-knob"></div></div>
     <script src="game.js"></script>
 </body>
 </html>

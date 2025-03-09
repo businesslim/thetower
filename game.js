@@ -1,6 +1,17 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const modal = document.getElementById('modal');
+const joystick = document.getElementById('joystick');
+const knob = document.getElementById('joystick-knob');
+
+// 캔버스 크기 조정 (모바일 반응형)
+function resizeCanvas() {
+    const size = Math.min(window.innerWidth, window.innerHeight * 4 / 3);
+    canvas.width = Math.min(800, size);
+    canvas.height = canvas.width * 3 / 4;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
 // 게임 상태
 let game = {
@@ -16,8 +27,8 @@ let game = {
 
 // 플레이어
 let player = {
-    x: 400,
-    y: 300,
+    x: canvas.width / 2,
+    y: canvas.height / 2,
     size: 20,
     baseSpeed: 5,
     speed: 5,
@@ -39,6 +50,7 @@ let items = [];
 let stageItems = [];
 let dropItems = [];
 let keys = {};
+let touch = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
 
 // 키보드 이벤트
 document.addEventListener('keydown', (e) => { 
@@ -46,6 +58,50 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleEnter();
 });
 document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+// 터치 이벤트
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (game.state === 'start') {
+        handleEnter();
+        return;
+    }
+    const touchEvent = e.touches[0];
+    touch.active = true;
+    touch.startX = touchEvent.clientX - canvas.offsetLeft;
+    touch.startY = touchEvent.clientY - canvas.offsetTop;
+    joystick.style.display = 'block';
+    joystick.style.left = `${touch.startX - 50}px`;
+    joystick.style.top = `${touch.startY - 50}px`;
+    knob.style.left = '30px';
+    knob.style.top = '30px';
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!touch.active) return;
+    const touchEvent = e.touches[0];
+    const currentX = touchEvent.clientX - canvas.offsetLeft;
+    const currentY = touchEvent.clientY - canvas.offsetTop;
+    touch.dx = currentX - touch.startX;
+    touch.dy = currentY - touch.startY;
+    const dist = Math.sqrt(touch.dx * touch.dx + touch.dy * touch.dy);
+    const maxDist = 50; // 조이스틱 이동 반경
+    if (dist > maxDist) {
+        touch.dx = (touch.dx / dist) * maxDist;
+        touch.dy = (touch.dy / dist) * maxDist;
+    }
+    knob.style.left = `${30 + touch.dx}px`;
+    knob.style.top = `${30 + touch.dy}px`;
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    touch.active = false;
+    touch.dx = 0;
+    touch.dy = 0;
+    joystick.style.display = 'none';
+}, { passive: false });
 
 // 적 생성
 function spawnEnemy() {
@@ -64,13 +120,25 @@ function spawnEnemy() {
 function movePlayer() {
     player.moving = false;
     let dx = 0, dy = 0;
+
+    // 키보드 입력
     if (keys['ArrowLeft'] && player.x - player.size > 0) dx = -1;
     if (keys['ArrowRight'] && player.x + player.size < canvas.width) dx = 1;
     if (keys['ArrowUp'] && player.y - player.size > 0) dy = -1;
     if (keys['ArrowDown'] && player.y + player.size < canvas.height) dy = 1;
+
+    // 터치 입력
+    if (touch.active) {
+        dx = touch.dx / 50; // 조이스틱 이동 거리 비율
+        dy = touch.dy / 50;
+    }
+
     if (dx !== 0 || dy !== 0) {
-        player.x += dx * player.speed;
-        player.y += dy * player.speed;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        player.x += (dx / dist) * player.speed;
+        player.y += (dy / dist) * player.speed;
+        player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+        player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
         player.moving = true;
     }
 }
@@ -101,6 +169,7 @@ function shootBullet() {
 function moveEnemies() {
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
+        if (!enemy) continue;
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -179,7 +248,7 @@ function generateStageItems() {
         { type: 'heart', value: 1, prob: 0.10 }
     ];
     stageItems = [];
-    const positions = [[200, 400], [350, 400], [500, 400]].sort(() => Math.random() - 0.5);
+    const positions = [[canvas.width * 0.25, canvas.height * 0.75], [canvas.width * 0.45, canvas.height * 0.75], [canvas.width * 0.65, canvas.height * 0.75]].sort(() => Math.random() - 0.5);
     for (let i = 0; i < 3; i++) {
         let r = Math.random(), cumulative = 0;
         for (const item of allItems) {
@@ -247,20 +316,21 @@ function drawHearts() {
 
 function drawText(text, x, y, color = 'white', size = 36) {
     ctx.fillStyle = color;
-    ctx.font = `${size}px Arial`;
+    ctx.font = `${size * canvas.width / 800}px Arial`;
     ctx.fillText(text, x, y);
 }
 
 // 모달 표시
 function showItemModal() {
     modal.style.display = 'block';
-    modal.style.left = '300px';
-    modal.style.top = '200px';
+    modal.style.left = `${canvas.width / 2 - 150}px`;
+    modal.style.top = `${canvas.height / 2 - 100}px`;
     modal.innerHTML = '<h2>Select Item</h2>';
     dropItems.forEach(item => {
         const button = document.createElement('button');
         button.innerHTML = `${item.type.replace('_', ' ')}<br>${item.desc}`;
-        button.onclick = () => selectDropItem(item);
+        button.addEventListener('touchstart', () => selectDropItem(item));
+        button.addEventListener('click', () => selectDropItem(item));
         modal.appendChild(button);
     });
 }
@@ -281,7 +351,7 @@ function selectDropItem(item) {
     if (game.state !== 'portal') game.state = 'playing';
 }
 
-// Enter 키 처리
+// Enter 및 터치 시작 처리
 function handleEnter() {
     if (game.state === 'start') {
         game.state = 'playing';
@@ -302,14 +372,14 @@ function handleEnter() {
 
 // 게임 리셋
 function resetGame() {
-    player = { ...player, x: 400, y: 300, hearts: 3, maxHearts: 3, speed: 5, attackSpeed: 60, doubleShot: false, currentWeapon: 'Pistol' };
+    player = { ...player, x: canvas.width / 2, y: canvas.height / 2, hearts: 3, maxHearts: 3, speed: 5, attackSpeed: 60, doubleShot: false, currentWeapon: 'Pistol' };
     game = { ...game, floor: 1, kills: 0, totalKills: 0 };
     resetFloor();
 }
 
 function resetFloor() {
-    player.x = 400;
-    player.y = 300;
+    player.x = canvas.width / 2;
+    player.y = canvas.height / 2;
     enemies = [];
     for (let i = 0; i < 2; i++) spawnEnemy();
     bullets = [];
@@ -326,8 +396,8 @@ function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (game.state === 'start') {
-        drawText('The Tower', 300, 250);
-        drawText('Press Enter to Start', 280, 350, 'white', 24);
+        drawText('The Tower', canvas.width / 2 - 100, canvas.height / 2 - 50);
+        drawText('Touch to Start', canvas.width / 2 - 120, canvas.height / 2 + 50, 'white', 24);
     } else if (game.state === 'playing') {
         game.spawnTimer++;
         if (game.spawnTimer >= game.baseSpawnTime * (1 - 0.03 * (game.floor - 1))) {
@@ -347,7 +417,7 @@ function update() {
         drawItems();
         drawHearts();
         drawText(`${game.floor}${game.floor === 1 ? 'st' : game.floor === 2 ? 'nd' : game.floor === 3 ? 'rd' : 'th'} Floor`, 10, 40);
-        drawText(`Weapon: ${player.currentWeapon}`, 600, 40, 'white', 24);
+        drawText(`Weapon: ${player.currentWeapon}`, canvas.width - 200, 40, 'white', 24);
 
         if (game.kills >= 10 + (game.floor - 1)) {
             game.state = 'stage_clear';
@@ -355,37 +425,37 @@ function update() {
         }
     } else if (game.state === 'stage_clear') {
         const clearTime = Math.floor((performance.now() - game.startTime) / 1000);
-        drawText('Stage Clear', 300, 200);
-        drawText(`Enemies Killed: ${game.kills}`, 300, 250);
-        drawText(`Clear Time: ${clearTime} sec`, 300, 300);
+        drawText('Stage Clear', canvas.width / 2 - 100, canvas.height / 2 - 100);
+        drawText(`Enemies Killed: ${game.kills}`, canvas.width / 2 - 120, canvas.height / 2 - 50);
+        drawText(`Clear Time: ${clearTime} sec`, canvas.width / 2 - 120, canvas.height / 2);
         stageItems.forEach(item => {
             ctx.fillStyle = 'gray';
-            ctx.fillRect(item.x, item.y, 100, 50);
+            ctx.fillRect(item.x - 50, item.y - 25, 100, 50);
         });
         if (game.stageItemSelected) {
-            drawText(`Selected: ${stageItems[0].text}`, 300, 350, 'yellow');
-            drawText('Press Enter for Next Floor', 280, 550);
+            drawText(`Selected: ${stageItems[0].text}`, canvas.width / 2 - 120, canvas.height / 2 + 50, 'yellow');
+            drawText('Touch to Next Floor', canvas.width / 2 - 120, canvas.height / 2 + 100, 'white', 24);
         }
     } else if (game.state === 'game_over') {
-        drawText(`You died at ${game.floor}${game.floor === 1 ? 'st' : game.floor === 2 ? 'nd' : game.floor === 3 ? 'rd' : 'th'} Floor`, 200, 250);
-        drawText(`Total Enemies Killed: ${game.totalKills}`, 250, 300);
-        drawText('Press Enter to Restart', 280, 350);
+        drawText(`You died at ${game.floor}${game.floor === 1 ? 'st' : game.floor === 2 ? 'nd' : game.floor === 3 ? 'rd' : 'th'} Floor`, canvas.width / 2 - 200, canvas.height / 2 - 50);
+        drawText(`Total Enemies Killed: ${game.totalKills}`, canvas.width / 2 - 150, canvas.height / 2);
+        drawText('Touch to Restart', canvas.width / 2 - 120, canvas.height / 2 + 50, 'white', 24);
     } else if (game.state === 'portal') {
-        drawText('Portal Activated', 300, 250);
-        drawText('Press Enter to Next Floor', 280, 350);
+        drawText('Portal Activated', canvas.width / 2 - 120, canvas.height / 2 - 50);
+        drawText('Touch to Next Floor', canvas.width / 2 - 120, canvas.height / 2 + 50, 'white', 24);
     }
 
     requestAnimationFrame(update);
 }
 
-// 클릭 이벤트 (스테이지 클리어 아이템 선택)
-document.addEventListener('click', (e) => {
+// 클릭 및 터치 이벤트 (스테이지 클리어 아이템 선택)
+canvas.addEventListener('touchstart', (e) => {
     if (game.state === 'stage_clear' && !game.stageItemSelected) {
         const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
+        const touchX = e.touches[0].clientX - rect.left;
+        const touchY = e.touches[0].clientY - rect.top;
         stageItems.forEach(item => {
-            if (clickX > item.x && clickX < item.x + 100 && clickY > item.y && clickY < item.y + 50) {
+            if (touchX > item.x - 50 && touchX < item.x + 50 && touchY > item.y - 25 && touchY < item.y + 25) {
                 if (item.type === 'weapon') {
                     player.attackSpeed *= (1 - item.value);
                     player.attackSpeed = Math.max(10, player.attackSpeed);
@@ -403,6 +473,6 @@ document.addEventListener('click', (e) => {
             }
         });
     }
-});
+}, { passive: false });
 
 update();
