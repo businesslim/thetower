@@ -5,11 +5,31 @@
     <title>The Tower</title>
     <style>
         canvas { border: 1px solid white; background: black; }
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: black; }
+        #modal { 
+            position: absolute; 
+            background: #323232; 
+            border: 2px solid white; 
+            color: white; 
+            padding: 20px; 
+            display: none; 
+            text-align: center; 
+            font-family: Arial, sans-serif;
+        }
+        #modal button { 
+            margin: 5px; 
+            padding: 10px; 
+            background: #969696; 
+            border: none; 
+            color: white; 
+            cursor: pointer; 
+        }
+        #modal button:hover { background: #b4b4b4; }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="modal"></div>
     <script src="game.js"></script>
 </body>
 </html>
