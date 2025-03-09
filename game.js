@@ -4,7 +4,7 @@ const modal = document.getElementById('modal');
 
 // 게임 상태
 let game = {
-    state: 'start',  // start, playing, stage_clear, game_over, portal, item_selection
+    state: 'start',
     floor: 1,
     kills: 0,
     totalKills: 0,
@@ -55,7 +55,9 @@ function spawnEnemy() {
     else if (edge === 1) { x = canvas.width; y = Math.random() * canvas.height; }
     else if (edge === 2) { x = Math.random() * canvas.width; y = 0; }
     else { x = Math.random() * canvas.width; y = canvas.height; }
-    enemies.push({ x, y, size: 15, speed: player.baseSpeed * 0.5 * (1 + 0.03 * (game.floor - 1)) });
+    const enemy = { x, y, size: 15, speed: player.baseSpeed * 0.5 * (1 + 0.03 * (game.floor - 1)) };
+    enemies.push(enemy);
+    return enemy;
 }
 
 // 플레이어 이동
@@ -97,27 +99,28 @@ function shootBullet() {
 
 // 적 이동
 function moveEnemies() {
-    enemies.forEach(enemy => {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         enemy.x += (dx / dist) * enemy.speed;
         enemy.y += (dy / dist) * enemy.speed;
 
-        // 플레이어와 충돌
         if (dist < player.size + enemy.size && !player.invincible) {
             player.hearts--;
             player.invincible = true;
             player.invincibleTimer = 180;
-            enemies.splice(enemies.indexOf(enemy), 1);
+            enemies.splice(i, 1);
             if (player.hearts <= 0) game.state = 'game_over';
         }
-    });
+    }
 }
 
 // 총알 이동 및 충돌
 function moveBullets() {
-    bullets.forEach((bullet, bulletIndex) => {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
         const dx = bullet.targetX - bullet.x;
         const dy = bullet.targetY - bullet.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -125,33 +128,36 @@ function moveBullets() {
             bullet.x += (dx / dist) * bullet.speed;
             bullet.y += (dy / dist) * bullet.speed;
         } else if (!enemies.some(e => Math.sqrt((bullet.x - e.x) ** 2 + (bullet.y - e.y) ** 2) < bullet.size + e.size)) {
-            bullets.splice(bulletIndex, 1);
-            return;
+            bullets.splice(i, 1);
+            continue;
         }
 
-        enemies.forEach((enemy, enemyIndex) => {
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const enemy = enemies[j];
             const distToEnemy = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
             if (distToEnemy < bullet.size + enemy.size) {
-                enemies.splice(enemyIndex, 1);
-                bullets.splice(bulletIndex, 1);
+                enemies.splice(j, 1);
+                bullets.splice(i, 1);
                 game.kills++;
                 game.totalKills++;
                 if (Math.random() < 0.05) items.push({ x: enemy.x, y: enemy.y, size: 15 });
+                break;
             }
-        });
-    });
+        }
+    }
 }
 
 // 아이템 획득
 function checkItems() {
-    items.forEach((item, index) => {
+    for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
         const dist = Math.sqrt((player.x - item.x) ** 2 + (player.y - item.y) ** 2);
         if (dist < player.size + item.size) {
             game.state = 'item_selection';
             generateDropItems();
-            items.splice(index, 1);
+            items.splice(i, 1);
         }
-    });
+    }
 }
 
 // 드롭 아이템 생성
@@ -161,7 +167,7 @@ function generateDropItems() {
         { type: 'double_pistol', desc: 'Fire 2 bullets at the same time' },
         { type: 'heal', desc: 'Heal 1 heart' },
         { type: 'portal', desc: 'Open a portal to the next floor' }
-    ].sort(() => Math.random() - 0.5).slice(0, 2);  // 2개 랜덤 선택
+    ].sort(() => Math.random() - 0.5).slice(0, 2);
     showItemModal();
 }
 
@@ -248,6 +254,8 @@ function drawText(text, x, y, color = 'white', size = 36) {
 // 모달 표시
 function showItemModal() {
     modal.style.display = 'block';
+    modal.style.left = '300px';
+    modal.style.top = '200px';
     modal.innerHTML = '<h2>Select Item</h2>';
     dropItems.forEach(item => {
         const button = document.createElement('button');
@@ -302,13 +310,15 @@ function resetGame() {
 function resetFloor() {
     player.x = 400;
     player.y = 300;
-    enemies = [spawnEnemy(), spawnEnemy()];
+    enemies = [];
+    for (let i = 0; i < 2; i++) spawnEnemy();
     bullets = [];
     items = [];
     game.kills = 0;
     game.startTime = performance.now();
     game.stageItemSelected = false;
     game.spawnTimer = 0;
+    console.log('Floor reset:', { enemies: enemies.length, player: player.x, state: game.state });
 }
 
 // 메인 업데이트
@@ -356,29 +366,6 @@ function update() {
             drawText(`Selected: ${stageItems[0].text}`, 300, 350, 'yellow');
             drawText('Press Enter for Next Floor', 280, 550);
         }
-        document.addEventListener('click', (e) => {
-            if (game.state === 'stage_clear' && !game.stageItemSelected) {
-                stageItems.forEach(item => {
-                    if (e.clientX - canvas.offsetLeft > item.x && e.clientX - canvas.offsetLeft < item.x + 100 &&
-                        e.clientY - canvas.offsetTop > item.y && e.clientY - canvas.offsetTop < item.y + 50) {
-                        if (item.type === 'weapon') {
-                            player.attackSpeed *= (1 - item.value);
-                            player.attackSpeed = Math.max(10, player.attackSpeed);
-                            item.text = `Weapon Speed +${Math.floor(item.value * 100)}%`;
-                        } else if (item.type === 'speed') {
-                            player.speed += player.baseSpeed * item.value;
-                            item.text = `Move Speed +${Math.floor(item.value * 100)}%`;
-                        } else if (item.type === 'heart') {
-                            player.maxHearts++;
-                            player.hearts = player.maxHearts;
-                            item.text = 'Heart +1';
-                        }
-                        stageItems = [item];
-                        game.stageItemSelected = true;
-                    }
-                });
-            }
-        }, { once: true });
     } else if (game.state === 'game_over') {
         drawText(`You died at ${game.floor}${game.floor === 1 ? 'st' : game.floor === 2 ? 'nd' : game.floor === 3 ? 'rd' : 'th'} Floor`, 200, 250);
         drawText(`Total Enemies Killed: ${game.totalKills}`, 250, 300);
@@ -390,5 +377,32 @@ function update() {
 
     requestAnimationFrame(update);
 }
+
+// 클릭 이벤트 (스테이지 클리어 아이템 선택)
+document.addEventListener('click', (e) => {
+    if (game.state === 'stage_clear' && !game.stageItemSelected) {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        stageItems.forEach(item => {
+            if (clickX > item.x && clickX < item.x + 100 && clickY > item.y && clickY < item.y + 50) {
+                if (item.type === 'weapon') {
+                    player.attackSpeed *= (1 - item.value);
+                    player.attackSpeed = Math.max(10, player.attackSpeed);
+                    item.text = `Weapon Speed +${Math.floor(item.value * 100)}%`;
+                } else if (item.type === 'speed') {
+                    player.speed += player.baseSpeed * item.value;
+                    item.text = `Move Speed +${Math.floor(item.value * 100)}%`;
+                } else if (item.type === 'heart') {
+                    player.maxHearts++;
+                    player.hearts = player.maxHearts;
+                    item.text = 'Heart +1';
+                }
+                stageItems = [item];
+                game.stageItemSelected = true;
+            }
+        });
+    }
+});
 
 update();
